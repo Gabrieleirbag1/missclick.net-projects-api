@@ -4,12 +4,21 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const port = 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
+
+const uploadsDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(path.join(__dirname, 'public'))) {
+  fs.mkdirSync(path.join(__dirname, 'public'));
+}
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -24,20 +33,34 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+const deleteFile = async (filename) => {
+  if (!filename) return;
+  
+  const filePath = path.join(__dirname, 'public/uploads', filename);
+  try {
+    if (fs.existsSync(filePath)) {
+      await fs.promises.unlink(filePath);
+      console.log(`Deleted file: ${filename}`);
+    }
+  } catch (error) {
+    console.error(`Error deleting file ${filename}:`, error);
+  }
+};
+
+app.use('/api/projects/image', express.static(path.join(__dirname, 'public/uploads')));
 
 mongoose.connect('mongodb://localhost:27017/projectsDB');
 
 const projectSchema = new mongoose.Schema({
-  title: String,
-  description: [String],
-  imageUrl: { grid: String, list: String },
-  link: String,
-  date: String,
-  tags: [String],
-  technologies: [String],
+    title: String,
+    description: [String],
+    imageUrl: { grid: String, list: String },
+    link: String,
+    date: String,
+    tags: [String],
+    technologies: [String],
 });
-
+  
 const Project = mongoose.model('Project', projectSchema);
 
 app.get('/api/projects', async (req, res) => {
@@ -45,13 +68,6 @@ app.get('/api/projects', async (req, res) => {
   const projects = await Project.find();
   console.log('Sending response:', projects);
   res.json(projects);
-});
-
-app.get('/api/projects/:id', async (req, res) => {
-  console.log('Received GET request for /api/projects/:id');
-  const project = await Project.findById(req.params.id);
-  console.log('Sending response:', project);
-  res.json(project);
 });
 
 app.get('/api/projects/image/:filename', (req, res) => {
@@ -66,8 +82,29 @@ app.get('/api/projects/image/:filename', (req, res) => {
     } else {
       console.log('File sent successfully');
     }
+  });
+});
+
+app.get('/api/projects/:id', async (req, res) => {
+  try {
+    console.log('Received GET request for project ID:', req.params.id);
+    
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid project ID format' });
+    }
+    
+    const project = await Project.findById(req.params.id);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    console.log('Sending response:', project);
+    res.json(project);
+  } catch (error) {
+    console.error('Error getting project:', error);
+    res.status(500).json({ error: error.message });
   }
-  );
 });
 
 // Handle file uploads (modified endpoint)
@@ -89,7 +126,7 @@ app.post('/api/projects', upload.fields([
       // If parsing fails, use the data directly (it might already be an object)
       projectData = req.body;
     }
-
+    
     // Add image URLs, checking if req.files and the specific fields exist
     projectData.imageUrl = {
       grid: req.files && req.files['gridImage'] ? req.files['gridImage'][0].filename : '',
@@ -112,7 +149,7 @@ app.put('/api/projects/:id', upload.fields([
 ]), async (req, res) => {
   try {
     console.log('Received PUT request for /api/projects/:id');
-
+    
     let projectData;
     try {
       // Try to parse as JSON string first
@@ -121,21 +158,33 @@ app.put('/api/projects/:id', upload.fields([
       // If parsing fails, use the data directly
       projectData = req.body;
     }
-
+    
     const existingProject = await Project.findById(req.params.id);
-
-    // Update image URLs only if new files were uploaded, with safe property access
+    if (!existingProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Delete old images if new ones are uploaded
+    if (req.files && req.files['gridImage'] && existingProject.imageUrl.grid) {
+      await deleteFile(existingProject.imageUrl.grid);
+    }
+    
+    if (req.files && req.files['listImage'] && existingProject.imageUrl.list) {
+      await deleteFile(existingProject.imageUrl.list);
+    }
+    
+    // Update image URLs only if new files were uploaded
     projectData.imageUrl = {
       grid: req.files && req.files['gridImage'] ? req.files['gridImage'][0].filename : existingProject.imageUrl.grid,
       list: req.files && req.files['listImage'] ? req.files['listImage'][0].filename : existingProject.imageUrl.list
     };
-
+    
     const updatedProject = await Project.findByIdAndUpdate(
-      req.params.id,
-      projectData,
+      req.params.id, 
+      projectData, 
       { new: true }
     );
-
+    
     console.log('Updated project:', updatedProject);
     res.json(updatedProject);
   } catch (error) {
@@ -145,10 +194,28 @@ app.put('/api/projects/:id', upload.fields([
 });
 
 app.delete('/api/projects/:id', async (req, res) => {
-  console.log('Received DELETE request for /api/projects/:id');
-  const deletedProject = await Project.findByIdAndDelete(req.params.id);
-  console.log('Deleted project:', deletedProject);
-  res.json(deletedProject);
+  try {
+    console.log('Received DELETE request for /api/projects/:id');
+    const deletedProject = await Project.findByIdAndDelete(req.params.id);
+    
+    if (!deletedProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Delete associated image files
+    if (deletedProject.imageUrl.grid) {
+      await deleteFile(deletedProject.imageUrl.grid);
+    }
+    if (deletedProject.imageUrl.list) {
+      await deleteFile(deletedProject.imageUrl.list);
+    }
+    
+    console.log('Deleted project:', deletedProject);
+    res.json(deletedProject);
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(port, () => {
