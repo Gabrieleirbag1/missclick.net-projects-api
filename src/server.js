@@ -202,11 +202,12 @@ app.delete('/api/projects/:id', async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    // Delete associated image files
     if (deletedProject.imageUrl.grid) {
+      console.log('Deleting grid image:', deletedProject.imageUrl.grid);
       await deleteFile(deletedProject.imageUrl.grid);
     }
     if (deletedProject.imageUrl.list) {
+      console.log('Deleting list image:', deletedProject.imageUrl.list);
       await deleteFile(deletedProject.imageUrl.list);
     }
     
