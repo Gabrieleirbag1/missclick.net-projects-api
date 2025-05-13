@@ -12,6 +12,6 @@ RUN mkdir -p src/public/uploads
 
 WORKDIR /app/src
 
-EXPOSE 3000
+EXPOSE 3100
 
 CMD ["node", "server.js"]
