@@ -49,7 +49,9 @@ const deleteFile = async (filename) => {
 
 app.use('/api/projects/image', express.static(path.join(__dirname, 'public/uploads')));
 
-mongoose.connect('mongodb://localhost:27017/projectsDB');
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/projectsDB';
+console.log('Connecting to MongoDB at:', mongoUri);
+mongoose.connect(mongoUri);
 
 const projectSchema = new mongoose.Schema({
     title: String,
