@@ -1,0 +1,35 @@
+services:
+  mongodb:
+    image: mongo:4.4
+    container_name: mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  angular:
+    image: missclicknet-angular:latest
+    container_name: angular
+    ports:
+      - "4200:4200"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: projects-api
+    ports:
+      - "3100:3100"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/projectsDB
+    volumes:
+      - ./src/public/uploads:/app/src/public/uploads
+      - ./src/private/secrets:/app/src/private/secrets
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
