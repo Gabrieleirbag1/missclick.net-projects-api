@@ -72,21 +72,26 @@ app.get('/api/projects', async (req, res) => {
   res.json(projects);
 });
 
-app.get('/api/projects/secrets', async (req, res) => {
+app.get('/api/projects/secrets/:key', async (req, res) => {
   try {
     const configPath = path.join(__dirname, 'private', 'secrets', '.secrets.json');
-    console.log(configPath);
+    const key = req.params.key;
+    
     if (fs.existsSync(configPath)) {
       const secretsData = fs.readFileSync(configPath, 'utf8');
       const secrets = JSON.parse(secretsData);
-      console.log('Sending secrets:', secrets);
-      res.json(secrets);
+      
+      if (secrets.hasOwnProperty(key)) {
+        res.json({ [key]: secrets[key] });
+      } else {
+        res.status(404).json({ error: `Secret with key "${key}" not found` });
+      }
     } else {
       res.status(404).json({ error: 'Configuration file not found' });
     }
   } catch (error) {
-    console.error('Error retrieving secrets:', error);
-    res.status(500).json({ error: 'Failed to retrieve secrets' });
+    console.error('Error retrieving secret:', error);
+    res.status(500).json({ error: 'Failed to retrieve secret' });
   }
 });
 
