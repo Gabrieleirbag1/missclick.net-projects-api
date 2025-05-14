@@ -19,6 +19,7 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/projectsDB
     volumes:
       - ./src/public/uploads:/app/src/public/uploads
+      - ./src/private/secrets:/app/src/private/secrets
     restart: unless-stopped
 
 volumes:
